@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.log
+audience-receipt.md
+audience-receipt.json
+.DS_Store

@@ -1,0 +1,34 @@
+{
+  "steps": [
+    {
+      "id": "market",
+      "evidence": "Buyers gather in r/EtsySellers and the Etsy forums",
+      "evidenceRef": ""
+    },
+    {
+      "id": "pain",
+      "evidence": "Sellers spend 2h/week copying fees into a spreadsheet",
+      "evidenceRef": ""
+    },
+    {
+      "id": "buyer",
+      "evidence": "",
+      "evidenceRef": ""
+    },
+    {
+      "id": "distribution",
+      "evidence": "",
+      "evidenceRef": ""
+    },
+    {
+      "id": "pricing",
+      "evidence": "",
+      "evidenceRef": ""
+    },
+    {
+      "id": "product",
+      "evidence": "",
+      "evidenceRef": ""
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+source,author,bio,text,likes
+x,buyer1,"Shop owner, sells handmade goods",How much does it cost for a small shop like mine?,
+email,buyer2,,Can I buy this for my team? We need it for our customers.,
+reddit,buyer3,,We currently use a spreadsheet and pay $40 a month for it. When can we try yours?,
+x,peer1,"Indie hacker, building in public","I built a similar tool last year, my repo is on GitHub. Great stack by the way!",
+x,peer2,Software engineer,What framework did you use to build this? I made my own version with the same tech stack.,
+github,peer3,,"Check out my project, it does the same thing — I shipped it last month.",
+x,fan1,,Nice!,
+x,fan2,,Love it 🔥,
+x,mixed1,"Indie hacker, runs a small agency",I built my own version and my clients keep asking how much it costs — would pay for this.,
+x,vague1,,Interesting.,

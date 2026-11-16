@@ -1,0 +1,34 @@
+{
+  "steps": [
+    {
+      "id": "market",
+      "evidence": "Buyers gather in r/EtsySellers",
+      "evidenceRef": ""
+    },
+    {
+      "id": "pain",
+      "evidence": "Sellers spend 2h/week on fee math",
+      "evidenceRef": ""
+    },
+    {
+      "id": "buyer",
+      "evidence": "20 named sellers from the forum",
+      "evidenceRef": ""
+    },
+    {
+      "id": "distribution",
+      "evidence": "First customers from the forum's weekly thread",
+      "evidenceRef": ""
+    },
+    {
+      "id": "pricing",
+      "evidence": "They pay $15/mo for a spreadsheet tool today",
+      "evidenceRef": ""
+    },
+    {
+      "id": "product",
+      "evidence": "Fee calculator + receipt export only",
+      "evidenceRef": ""
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "question": "Tell me about the last time you hit this problem.",
+      "answer": "Looks great, I would definitely use it!"
+    },
+    {
+      "question": "What did you do to work around it?",
+      "answer": "Last week I paid $40 for a tool that does half of this, and I currently use a spreadsheet instead."
+    },
+    {
+      "question": "Have you paid for anything to solve this before?",
+      "answer": "I might try it someday, maybe."
+    },
+    {
+      "question": "What did you try that did not work?",
+      "answer": "I tried two other tools last month and switched from one because it was too slow."
+    }
+  ]
+}

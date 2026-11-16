@@ -1,0 +1,6 @@
+email,use_case,alternative,intent,likes,follows,views
+a@example.com,,,,120,50,1000
+b@example.com,I track Etsy fees weekly,spreadsheet,use-case,0,0,0
+c@example.com,I track Etsy fees weekly,spreadsheet,use-case,0,0,0
+d@example.com,,,preorder,0,0,0
+e@example.com,,,paid-pilot,0,0,0
