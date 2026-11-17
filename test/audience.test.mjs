@@ -161,8 +161,22 @@ test("CLI with no data reports that instead of inventing data", () => {
 });
 
 test("CLI --version and --help", () => {
-  assert.match(execFileSync(process.execPath, [cli, "--version"], { encoding: "utf-8" }), /audience-receipt 0\.1\.0/);
+  assert.match(execFileSync(process.execPath, [cli, "--version"], { encoding: "utf-8" }), /audience-receipt 0\.2\.0-dev/);
   const help = runCli(["--help"]);
   assert.equal(help.status, 0);
   assert.match(help.stdout, /audit|checklist|waitlist|launch|interview/);
+});
+
+test("skill wrapper: audience.mjs audit on fixture exits 0 and prints buyer", () => {
+  const skill = join(root, "skills", "audience-receipt", "scripts", "audience.mjs");
+  const out = spawnSync(process.execPath, [skill, "audit", "--file", fx("audit.csv")], { encoding: "utf-8" });
+  assert.equal(out.status, 0);
+  assert.match(out.stdout, /buyer/);
+});
+
+test("skill wrapper: audience.mjs --help exits 0", () => {
+  const skill = join(root, "skills", "audience-receipt", "scripts", "audience.mjs");
+  const out = spawnSync(process.execPath, [skill, "--help"], { encoding: "utf-8" });
+  assert.equal(out.status, 0);
+  assert.match(out.stdout, /audit|checklist|waitlist|launch|interview/);
 });

@@ -22,7 +22,7 @@ import {
   writeJson,
 } from "./render.js";
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0-dev";
 
 function usage(): string {
   return `audience-receipt ${VERSION} — an audience receipt for indie founders (local-first)

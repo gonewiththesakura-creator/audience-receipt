@@ -1,5 +1,7 @@
 # audience-receipt
 
+[![Tests](https://github.com/gonewiththesakura-creator/audience-receipt/actions/workflows/test.yml/badge.svg)](https://github.com/gonewiththesakura-creator/audience-receipt/actions/workflows/test.yml)
+
 Give your audience a receipt: of the people who actually responded to you
 last month, how many were buyers, how many were peer builders, and how many
 were just passing by — before you write another line of code.
@@ -29,6 +31,33 @@ npx tsx src/cli.ts --help
 
 Node ≥ 20. Zero runtime dependencies.
 
+## 作为 Claude Code Skill 使用
+
+本仓库自带一个 Claude Code skill（`skills/audience-receipt/`），
+装好后在 Claude Code 里直接问“我的受众到底是谁”就能触发审计，
+不用记命令。
+
+插件市场安装：
+
+```bash
+/plugin marketplace add gonewiththesakura-creator/audience-receipt
+/plugin install audience-receipt@audience-receipt-marketplace
+```
+
+手动安装（复制 skill 目录即可）：
+
+```bash
+cp -r skills/audience-receipt ~/.claude/skills/audience-receipt
+```
+
+装好后这样问就能触发：
+
+- “我的受众到底是谁？帮我审计一下上个月的回复”
+- “waitlist 里有多少是真想买的？”
+
+skill 只读你自己导入的导出文件，不爬取、不登录、不联网。
+触发场景与红线见 `skills/audience-receipt/SKILL.md`。
+
 ## Commands
 
 ### 1. `audit` — who actually responded?
@@ -56,6 +85,8 @@ Verdict: if peer builders are 70% or more of substantive responders, the
 receipt says so plainly — "this looks like social, not acquisition". The
 70% rule is a founder's heuristic from the research, not a law, and the
 receipt says that. Samples under 30 responders get no verdict at all.
+
+合成示例见 [docs/audience-receipt-example.md](docs/audience-receipt-example.md)（10 位虚构回复者的审计收据）。
 
 ### 2. `checklist` — distribution before building
 
