@@ -18,7 +18,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -107,3 +107,44 @@ test("at least one skill is linted", () => {
   const dirs = readdirSync(skillsDir, { withFileTypes: true }).filter((d) => d.isDirectory());
   assert.ok(dirs.length >= 1, "expected at least one skill directory under skills/");
 });
+
+// Plugin manifests (.claude-plugin / .codex-plugin / .cursor-plugin).
+// Each must be valid JSON, name the same plugin, carry the package
+// version, and point `skills` at a directory that exists on disk and
+// contains a SKILL.md. The layout follows the one verified 2026-11-17
+// in obra/superpowers: Claude Code uses a "skills" array, Codex and
+// Cursor a "skills" string pointing at ./skills/, and Codex adds an
+// `interface` block with displayName / category / capabilities.
+const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+
+for (const dir of [".claude-plugin", ".codex-plugin", ".cursor-plugin"]) {
+  test(`plugin manifest ${dir}/plugin.json is valid and points at the skill`, () => {
+    const file = join(root, dir, "plugin.json");
+    assert.ok(existsSync(file), `${file}: missing`);
+    const manifest = JSON.parse(readFileSync(file, "utf8"));
+    assert.equal(manifest.name, pkg.name,
+      `${file}: name ${JSON.stringify(manifest.name)} must match package name ${JSON.stringify(pkg.name)}`);
+    assert.equal(manifest.version, pkg.version,
+      `${file}: version ${JSON.stringify(manifest.version)} must match package version ${JSON.stringify(pkg.version)}`);
+    assert.ok(typeof manifest.description === "string" && manifest.description.length > 0,
+      `${file}: description must be a non-empty string`);
+
+    const skills = Array.isArray(manifest.skills) ? manifest.skills : [manifest.skills];
+    assert.ok(skills.length >= 1, `${file}: skills must list at least one path`);
+    for (const p of skills) {
+      assert.ok(typeof p === "string" && p.length > 0, `${file}: skills entry must be a non-empty string`);
+      const target = join(root, p);
+      assert.ok(existsSync(target), `${file}: skills path ${JSON.stringify(p)} does not exist`);
+      const hasSkill = existsSync(join(target, "SKILL.md")) ||
+        readdirSync(target, { withFileTypes: true }).some(
+          (d) => d.isDirectory() && existsSync(join(target, d.name, "SKILL.md")));
+      assert.ok(hasSkill, `${file}: skills path ${JSON.stringify(p)} contains no SKILL.md`);
+    }
+
+    if (dir === ".codex-plugin") {
+      assert.ok(manifest.interface && typeof manifest.interface.displayName === "string" &&
+        manifest.interface.displayName.length > 0,
+        `${file}: Codex manifest must carry interface.displayName`);
+    }
+  });
+}

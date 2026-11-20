@@ -32,6 +32,8 @@ skill 本身绝不自己算分、绝不编数据。
 | 用户问什么 | 跑什么（脚本路径以本 skill 目录为准） |
 |---|---|
 | “我的受众到底是谁？” / “点赞的人会买吗？” / “这波发帖算获客吗？” | `node scripts/audience.mjs audit --file <导出 CSV/JSON> [--labels labels.json] [--out DIR]` |
+| “这月受众比上月变好了吗？” / “买家占比在涨还是在跌？” | `node scripts/audience.mjs audit --file <上月导出> --compare <本月导出> [--labels labels.json] [--out DIR]`：每类占比变化（百分点）+ verdict 是否变了；任一样本 < 30 时只说方向、不下结论 |
+| “分类准不准？” / “规则在我的人身上管用吗？” | `node scripts/audience.mjs audit --file <导出 CSV/JSON> --measure labels.json [--out DIR]`：规则单独分类、与你的标签对照，给出一致率与 ≥70% 目标是否达成；标签只当答案、不参与审计本身；已打标签 < 30 人时只说方向、不下结论 |
 | “这产品该不该做？” / “动工前先检查一遍” | `node scripts/audience.mjs checklist --file checklist.json`；先 `node scripts/audience.mjs checklist --template checklist.json` 生成空白表再填证据 |
 | “waitlist 有多少是真想买的？” | `node scripts/audience.mjs waitlist --file waitlist.csv [--threshold N]`（默认阈值 10） |
 | “这次 launch 效果怎么样？” | `node scripts/audience.mjs launch --file launch.json` |
@@ -69,6 +71,15 @@ skill 本身绝不自己算分、绝不编数据。
 - 用户：“点赞的人会买吗？”
   → 先跑 audit，再讲清：点赞数只计 vanity、分数为零；真正像买家的
   有几位、证据是什么；不要拿点赞总数当购买意向。
+- 用户：“这月受众比上月变好了吗？”
+  → `node scripts/audience.mjs audit --file last-month.csv --compare this-month.csv`，
+  讲每类占比变化了几个百分点、verdict 是否变了；任一样本 < 30 时
+  只说方向、不下结论。
+- 用户：“分类准不准？”
+  → `node scripts/audience.mjs audit --file my-replies.csv --measure labels.json`，
+  讲规则与用户标签的一致率、≥70% 目标是否达成、哪几位分歧最大；
+  已打标签 < 30 人时说清“只是方向性数字”；不要把一次小样本的
+  一致率说成“分类已验证”。
 - 用户：“waitlist 有多少是真想买的？”
   → `node scripts/audience.mjs waitlist --file waitlist.csv`，讲清
   qualified（写了使用场景或更强意向）有几位、是否达到阈值；

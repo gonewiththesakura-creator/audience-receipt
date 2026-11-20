@@ -4,7 +4,9 @@
  */
 import { writeFileSync } from "node:fs";
 import { CHECKLIST_STEPS } from "./checklist.js";
+import type { AuditComparison } from "./compare.js";
 import type {
+  AgreementMeasurement,
   AuditResult,
   ChecklistResult,
   InterviewResult,
@@ -14,6 +16,32 @@ import type {
 
 function pct(x: number): string {
   return `${(x * 100).toFixed(1)}%`;
+}
+
+/** Shared wording for the --measure section, in both text and Markdown. */
+function measurementLines(m: AgreementMeasurement): string[] {
+  const lines: string[] = [];
+  if (m.labelled === 0) {
+    lines.push("Classification check: no responder in this export had a label to check against — nothing to measure.");
+    return lines;
+  }
+  const verdict = m.targetMet === null ? "not judged" : m.targetMet ? "met" : "NOT met";
+  lines.push(
+    `Classification check — rules vs your labels: ${m.labelled} labelled, rules agreed on ${m.agreed} (${pct(m.agreement ?? 0)}). Target: >=${Math.round(m.target * 100)}% agreement — ${verdict}.`,
+  );
+  if (m.sampleTooSmall) {
+    lines.push(`(Only ${m.labelled} labelled, need 30+ for a verdict on accuracy: this figure is directional only.)`);
+  }
+  if (m.mismatchTotal > 0) {
+    lines.push(`Disagreements (${m.mismatchTotal}):`);
+    for (const d of m.mismatches) {
+      lines.push(`  - ${d.author}: rules said ${d.predicted}, you said ${d.expected}`);
+    }
+    if (m.mismatchTotal > m.mismatches.length) {
+      lines.push(`  - ...and ${m.mismatchTotal - m.mismatches.length} more (see JSON output for all)`);
+    }
+  }
+  return lines;
 }
 
 export function renderAuditText(a: AuditResult): string {
@@ -34,6 +62,11 @@ export function renderAuditText(a: AuditResult): string {
   } else if (a.verdict) {
     lines.push(`Verdict: ${a.verdict}`);
     lines.push("(The 70% peer-share rule is a founder's heuristic from the research, not a law.)");
+  }
+  if (a.measurement) {
+    lines.push("");
+    lines.push(...measurementLines(a.measurement));
+    lines.push("(The labels were only the answer key for this check — they were not applied to the audit above. Use --labels to override classifications.)");
   }
   return lines.join("\n");
 }
@@ -57,12 +90,76 @@ export function renderAuditMarkdown(a: AuditResult): string {
     lines.push("");
     lines.push("The 70% peer-share rule is a founder's heuristic from the research, not a law.");
   }
+  if (a.measurement) {
+    lines.push("");
+    lines.push("## Classification check");
+    lines.push("");
+    lines.push(...measurementLines(a.measurement));
+    lines.push("");
+    lines.push("The labels were only the answer key for this check — they were not applied to the audit above. Use `--labels` to override classifications.");
+  }
   lines.push("");
   lines.push("## Per-row evidence");
   lines.push("");
   for (const c of a.classifications) {
     lines.push(`- **${c.responder.author}** (${c.responder.source}) → ${c.class} [${c.confidence}]: ${c.evidence.join("; ")}`);
   }
+  return lines.join("\n") + "\n";
+}
+
+export function renderCompareText(c: AuditComparison): string {
+  const lines: string[] = [];
+  lines.push(`Audience shift — ${c.beforeLabel} → ${c.afterLabel}`);
+  lines.push("=".repeat(44));
+  lines.push(`Substantive responders: ${c.beforeSubstantive} → ${c.afterSubstantive}`);
+  lines.push("");
+  lines.push("Class                Before        After         Change");
+  lines.push("------------------------------------------------------------");
+  for (const row of c.classes) {
+    const before = `${row.beforeCount} (${(row.beforeShare * 100).toFixed(1)}%)`;
+    const after = `${row.afterCount} (${(row.afterShare * 100).toFixed(1)}%)`;
+    const delta = `${row.countDelta >= 0 ? "+" : ""}${row.countDelta}  ${row.shareDeltaPp >= 0 ? "+" : ""}${row.shareDeltaPp.toFixed(1)}pp`;
+    lines.push(`${row.class.padEnd(20)} ${before.padStart(11)}  ${after.padStart(11)}  ${delta}`);
+  }
+  lines.push("");
+  lines.push(c.reading);
+  if (c.verdictChanged) {
+    lines.push("");
+    lines.push("Verdict changed:");
+    lines.push(`  Before: ${c.beforeVerdict}`);
+    lines.push(`  After:  ${c.afterVerdict}`);
+  }
+  lines.push("");
+  lines.push("(The 70% peer-share rule is a founder's heuristic from the research, not a law.)");
+  return lines.join("\n");
+}
+
+export function renderCompareMarkdown(c: AuditComparison): string {
+  const lines: string[] = [];
+  lines.push(`# Audience shift — ${c.beforeLabel} → ${c.afterLabel}`);
+  lines.push("");
+  lines.push(`Substantive responders: ${c.beforeSubstantive} → ${c.afterSubstantive}`);
+  lines.push("");
+  lines.push("| Class | Before | After | Change |");
+  lines.push("| --- | ---: | ---: | ---: |");
+  for (const row of c.classes) {
+    lines.push(
+      `| ${row.class} | ${row.beforeCount} (${(row.beforeShare * 100).toFixed(1)}%) | ` +
+        `${row.afterCount} (${(row.afterShare * 100).toFixed(1)}%) | ` +
+        `${row.countDelta >= 0 ? "+" : ""}${row.countDelta} / ${row.shareDeltaPp >= 0 ? "+" : ""}${row.shareDeltaPp.toFixed(1)}pp |`,
+    );
+  }
+  lines.push("");
+  lines.push(c.reading);
+  if (c.verdictChanged) {
+    lines.push("");
+    lines.push("## Verdict changed");
+    lines.push("");
+    lines.push(`- Before: ${c.beforeVerdict}`);
+    lines.push(`- After: ${c.afterVerdict}`);
+  }
+  lines.push("");
+  lines.push("The 70% peer-share rule is a founder's heuristic from the research, not a law.");
   return lines.join("\n") + "\n";
 }
 

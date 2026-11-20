@@ -61,9 +61,19 @@ function matches(patterns: RegExp[], haystack: string): string[] {
   return hits;
 }
 
-export function classifyResponder(r: Responder): Classification {
-  // Rule 1: user label wins.
-  if (r.label) {
+/**
+ * Acceptance target for the rules: agreement with user-labelled samples.
+ * Measured by `audit --measure` (see src/audit.ts measureAgreement()).
+ * The rules are honest about this target — it is a bar to clear, not a
+ * claim already met.
+ */
+export const CLASSIFICATION_AGREEMENT_TARGET = 0.7;
+
+export function classifyResponder(r: Responder, opts?: { ignoreLabel?: boolean }): Classification {
+  // Rule 1: user label wins — unless the caller is measuring the rules
+  // against the labels, in which case the label is the answer key and
+  // must not also be the input.
+  if (r.label && !opts?.ignoreLabel) {
     return {
       responder: r,
       class: r.label,

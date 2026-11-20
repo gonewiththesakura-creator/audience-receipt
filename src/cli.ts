@@ -8,7 +8,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { importResponders, loadLabels } from "./importers.js";
 import { importWaitlistCsv, scoreWaitlist } from "./waitlist.js";
-import { buildAudit } from "./audit.js";
+import { buildAudit, measureAgreement } from "./audit.js";
+import { compareAudits } from "./compare.js";
 import { checklistTemplate, parseChecklistFile, runChecklist } from "./checklist.js";
 import { parseLaunchFile, trackLaunch } from "./launch.js";
 import { INTERVIEW_SCRIPT, parseInterviewFile, scoreInterview } from "./interview.js";
@@ -16,6 +17,8 @@ import {
   renderAuditMarkdown,
   renderAuditText,
   renderChecklistText,
+  renderCompareMarkdown,
+  renderCompareText,
   renderInterviewText,
   renderLaunchText,
   renderWaitlistText,
@@ -31,6 +34,17 @@ Usage:
   audience-receipt audit --file PATH [--labels PATH] [--out DIR]
       Audit who your responders really are: buyer / peer / passer-by / cannot-tell.
       PATH is a CSV or JSON export you made yourself. Never scrapes, never logs in.
+  audience-receipt audit --file BEFORE --compare AFTER [--labels PATH] [--out DIR]
+      Compare two audits (e.g. last month vs this month): per-class share
+      shifts in percentage points, and whether the verdict changed. Labels,
+      if given, apply to both files.
+  audience-receipt audit --file PATH --measure LABELS.json [--out DIR]
+      Score the classification rules against your labels: the rules classify
+      each labelled responder on their own, and the receipt reports how often
+      they agreed (target: >=70%). The labels are only the answer key here —
+      they are NOT applied to the audit itself (use --labels for that).
+      Under 30 labelled responders the figure is directional only.
+      Cannot be combined with --compare.
   audience-receipt checklist --file PATH [--template PATH]
       Distribution-before-build checklist (market -> pain -> buyer -> distribution
       -> pricing -> product). Missing evidence prints "Don't write code yet".
@@ -56,7 +70,9 @@ Notes:
 
 interface Flags {
   file?: string;
+  compare?: string;
   labels?: string;
+  measure?: string;
   out?: string;
   template?: string;
   threshold?: number;
@@ -71,7 +87,9 @@ function parseFlags(args: string[]): { flags: Flags; rest: string[] } {
     const a = args[i];
     const next = () => args[++i];
     if (a === "--file") flags.file = next();
+    else if (a === "--compare") flags.compare = next();
     else if (a === "--labels") flags.labels = next();
+    else if (a === "--measure") flags.measure = next();
     else if (a === "--out") flags.out = next();
     else if (a === "--template") flags.template = next();
     else if (a === "--threshold") flags.threshold = Number(next());
@@ -109,7 +127,48 @@ function main(argv: string[]): number {
       console.log("No responders found in that file. Nothing to audit — no data was invented.");
       return 0;
     }
+    if (flags.measure && flags.compare) {
+      console.error("audit --measure cannot be combined with --compare: measure one export at a time.");
+      return 2;
+    }
     const audit = buildAudit(responders, skippedRows);
+    if (flags.measure) {
+      if (!existsSync(flags.measure)) {
+        console.error(`File not found: ${flags.measure}`);
+        return 2;
+      }
+      const measureLabels = loadLabels(flags.measure);
+      // The measure labels are the answer key only: attach them to copies
+      // so the audit itself keeps its rule-only classifications.
+      const keyed = responders.map((r) => ({ ...r, label: measureLabels.get(r.author) }));
+      audit.measurement = measureAgreement(keyed);
+    }
+    if (flags.compare) {
+      // Two snapshots, one direction: share shifts + verdict change.
+      if (!existsSync(flags.compare)) {
+        console.error(`File not found: ${flags.compare}`);
+        return 2;
+      }
+      const after = importResponders(flags.compare, labels);
+      if (after.responders.length === 0) {
+        console.log("No responders found in the --compare file. Nothing to compare — no data was invented.");
+        return 0;
+      }
+      const comparison = compareAudits(audit, buildAudit(after.responders, after.skippedRows), {
+        beforeLabel: flags.file,
+        afterLabel: flags.compare,
+      });
+      console.log(renderCompareText(comparison));
+      if (flags.out) {
+        if (!existsSync(flags.out)) mkdirSync(flags.out, { recursive: true });
+        const mdPath = `${flags.out}/audience-compare.md`;
+        const jsonPath = `${flags.out}/audience-compare.json`;
+        writeFileSync(mdPath, renderCompareMarkdown(comparison));
+        writeJson(jsonPath, comparison);
+        console.log(`\nComparison written to ${mdPath} and ${jsonPath}`);
+      }
+      return 0;
+    }
     console.log(renderAuditText(audit));
     if (flags.out) {
       if (!existsSync(flags.out)) mkdirSync(flags.out, { recursive: true });

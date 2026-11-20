@@ -19,6 +19,7 @@
 | `skippedRows` | 跳过的畸形行数 | 有跳过时要如实提，不要略过 |
 | `verdict` | 一句话结论；样本 < 30 时为 `null` | 直接引用，不要改写其中的数字 |
 | `sampleTooSmall` | 样本是否 < 30（`true` 时无 verdict） | 为 `true` 时只说“样本太小，没有结论” |
+| `measurement` | 只在 `--measure` 时出现：规则与用户标签的一致率（`labelled` / `agreed` / `agreement`）、≥70% 目标是否达成（`targetMet`，样本 < 30 时为 `null`）、分歧清单（`mismatches`，最多 10 条） | 讲“分类准不准”时用；`sampleTooSmall` 为 `true` 时只说方向、不下结论；`mismatches` 里每条都是“规则说是 X，用户说是 Y” |
 
 ## classifications 每个元素的字段
 

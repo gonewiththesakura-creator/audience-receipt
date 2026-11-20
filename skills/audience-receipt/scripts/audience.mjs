@@ -7,6 +7,7 @@
  *
  * 用法（在 skill 目录里）：
  *   node scripts/audience.mjs audit --file <导出 CSV/JSON> [--labels labels.json] [--out DIR]
+ *   node scripts/audience.mjs audit --file <导出 CSV/JSON> --measure labels.json [--out DIR]
  *   node scripts/audience.mjs checklist --file <checklist.json>
  *   node scripts/audience.mjs checklist --template <checklist.json>
  *   node scripts/audience.mjs waitlist --file <waitlist.csv> [--threshold N]

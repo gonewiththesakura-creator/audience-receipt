@@ -58,6 +58,12 @@ cp -r skills/audience-receipt ~/.claude/skills/audience-receipt
 skill 只读你自己导入的导出文件，不爬取、不登录、不联网。
 触发场景与红线见 `skills/audience-receipt/SKILL.md`。
 
+Codex / Cursor 也能用：仓库里还有 `.codex-plugin/plugin.json` 和
+`.cursor-plugin/plugin.json`，指向同一个 `skills/audience-receipt/`
+目录（格式参照 obra/superpowers 的多宿主清单）。在真实 Codex /
+Cursor 里从本仓库安装还没验证过，先当作“清单已备好、安装路径待验证”；
+Claude Code 的两条安装路径如上。
+
 ## Commands
 
 ### 1. `audit` — who actually responded?
@@ -85,6 +91,24 @@ Verdict: if peer builders are 70% or more of substantive responders, the
 receipt says so plainly — "this looks like social, not acquisition". The
 70% rule is a founder's heuristic from the research, not a law, and the
 receipt says that. Samples under 30 responders get no verdict at all.
+
+**Compare two periods:** `audit --file last-month.csv --compare this-month.csv`
+runs the audit on both exports and shows, per class, how the share moved in
+percentage points, plus whether the verdict changed. A single audit is a
+snapshot; the comparison is what tells you whether the audience is shifting
+toward buyers or drifting further toward peers. If either sample is under 30,
+the comparison says so and reports the deltas as directional only — no
+conclusion. `--labels` applies to both files; `--out` writes
+`audience-compare.md` / `audience-compare.json`.
+
+**Measure the rules:** `audit --file my-replies.csv --measure labels.json`
+scores the classification rules against labels you supplied: each labelled
+responder is classified by the rules alone and compared to your label, and
+the receipt reports the agreement rate against the ≥70% acceptance target.
+The labels here are only the answer key — they are **not** applied to the
+audit itself (use `--labels` for that). Under 30 labelled responders the
+figure is directional only. A "cannot-tell" prediction counts as a miss.
+`--measure` cannot be combined with `--compare`.
 
 合成示例见 [docs/audience-receipt-example.md](docs/audience-receipt-example.md)（10 位虚构回复者的审计收据）。
 
@@ -156,8 +180,10 @@ Read this before trusting the tool.
 - **Classification accuracy is unproven.** Buyer vs peer is judged from
   public signals plus your labels. Small samples mislead, and one person
   can be both a peer and a buyer. The acceptance target is ≥70% agreement
-  with user-labelled samples; below that, the tool says so. "Cannot-tell"
-  is a real answer, not a failure.
+  with user-labelled samples — run `audit --file … --measure labels.json`
+  to check it on your own data; the receipt says whether the target was
+  met, and below 30 labelled responders it reports the figure as
+  directional only. "Cannot-tell" is a real answer, not a failure.
 - **A waitlist is not revenue.** Even a well-scored waitlist only proves
   that people left information or a deposit. The launch tracker only
   counts activation and payment, never registration.

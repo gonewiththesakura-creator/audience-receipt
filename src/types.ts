@@ -45,6 +45,37 @@ export interface AuditResult {
   /** Plain-language verdict, or null when the sample is too small to judge. */
   verdict: string | null;
   sampleTooSmall: boolean;
+  /** Present only when the audit ran with --measure. See measureAgreement(). */
+  measurement?: AgreementMeasurement;
+}
+
+/**
+ * How the classification rules scored against user-supplied labels.
+ *
+ * The labels are the answer key: each labelled responder is classified
+ * with the rules alone (labels ignored) and compared to the label the
+ * user gave. "cannot-tell" predictions count as misses — the rules
+ * declining to judge is honest, but it is not agreement.
+ */
+export interface AgreementMeasurement {
+  /** Substantive responders that had a label to check against. */
+  labelled: number;
+  /** Of those, how many the rules classified the same way. */
+  agreed: number;
+  /** agreed / labelled, or null when no responder had a label. */
+  agreement: number | null;
+  /** The acceptance target (0.7): rules must agree with labels at least this often. */
+  target: number;
+  /** True when agreement >= target, false when below, null when too small to judge. */
+  targetMet: boolean | null;
+  /** True when labelled < 30: the figure is directional only. */
+  sampleTooSmall: boolean;
+  /** Per class: how many were labelled that way, and how many the rules got right. */
+  perClass: Record<AudienceClass, { labelled: number; agreed: number }>;
+  /** Rule-vs-label disagreements, first 10 in file order. */
+  mismatches: { author: string; expected: AudienceClass; predicted: AudienceClass }[];
+  /** Total disagreements (mismatches above is capped at 10). */
+  mismatchTotal: number;
 }
 
 export type ChecklistStepId =

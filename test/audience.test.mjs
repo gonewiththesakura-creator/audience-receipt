@@ -5,11 +5,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { importResponders, loadLabels } from "../dist/importers.js";
-import { buildAudit } from "../dist/audit.js";
+import { buildAudit, measureAgreement } from "../dist/audit.js";
+import { compareAudits } from "../dist/compare.js";
 import { classifyResponder } from "../dist/classify.js";
 import { parseChecklistFile, runChecklist } from "../dist/checklist.js";
 import { importWaitlistCsv, scoreWaitlist } from "../dist/waitlist.js";
@@ -179,4 +181,212 @@ test("skill wrapper: audience.mjs --help exits 0", () => {
   const out = spawnSync(process.execPath, [skill, "--help"], { encoding: "utf-8" });
   assert.equal(out.status, 0);
   assert.match(out.stdout, /audit|checklist|waitlist|launch|interview/);
+});
+
+// --- compare: two audits, one direction ---
+// Labels always win over rules, so labelled synthetic responders give exact counts.
+function labelledResponders(counts) {
+  const out = [];
+  let i = 0;
+  for (const [cls, n] of Object.entries(counts)) {
+    for (let k = 0; k < n; k++) {
+      out.push({ id: `r${i}`, source: "x", author: `user${i}`, text: "synthetic row", label: cls });
+      i++;
+    }
+  }
+  return out;
+}
+
+test("compare: buyer share rising +25pp, verdict changes from social to buyers", () => {
+  const before = buildAudit(labelledResponders({ buyer: 6, peer: 28, "passer-by": 3, "cannot-tell": 3 }));
+  const after = buildAudit(labelledResponders({ buyer: 16, peer: 12, "passer-by": 6, "cannot-tell": 6 }));
+  assert.equal(before.substantive, 40);
+  assert.match(before.verdict, /social, not acquisition/);
+  assert.match(after.verdict, /contains real buyers/);
+  const c = compareAudits(before, after, { beforeLabel: "oct", afterLabel: "nov" });
+  assert.equal(c.verdictChanged, true);
+  assert.equal(c.sampleTooSmall, false);
+  const buyer = c.classes.find((r) => r.class === "buyer");
+  assert.equal(buyer.beforeCount, 6);
+  assert.equal(buyer.afterCount, 16);
+  assert.equal(buyer.shareDeltaPp, 25);
+  const peer = c.classes.find((r) => r.class === "peer");
+  assert.equal(peer.shareDeltaPp, -40);
+  assert.match(c.reading, /shifting toward buyers/);
+});
+
+test("compare: mix barely moved, no verdict change", () => {
+  const before = buildAudit(labelledResponders({ buyer: 12, peer: 20, "passer-by": 4, "cannot-tell": 4 }));
+  const after = buildAudit(labelledResponders({ buyer: 13, peer: 19, "passer-by": 4, "cannot-tell": 4 }));
+  const c = compareAudits(before, after, { beforeLabel: "a", afterLabel: "b" });
+  assert.equal(c.verdictChanged, false);
+  assert.match(c.reading, /barely moved/);
+});
+
+test("compare: either sample too small — deltas are directional only", () => {
+  const before = buildAudit(labelledResponders({ buyer: 3, peer: 3, "passer-by": 2, "cannot-tell": 2 }));
+  const after = buildAudit(labelledResponders({ buyer: 6, peer: 12, "passer-by": 6, "cannot-tell": 6 }));
+  const c = compareAudits(before, after, { beforeLabel: "a", afterLabel: "b" });
+  assert.equal(c.sampleTooSmall, true);
+  assert.equal(c.verdictChanged, false); // no verdict exists on the small side
+  assert.match(c.reading, /directional only/);
+});
+
+test("CLI audit --compare prints the shift and writes compare files with --out", () => {
+  const dir = mkdtempSync(join(tmpdir(), "audience-receipt-compare-"));
+  const buyerRow = (i) => `x,buyer${i},Shop owner,How much does it cost for my shop?,`;
+  const peerRow = (i) => `x,peer${i},Indie hacker,I built a similar tool check out my repo,`;
+  const passerRow = (i) => `x,passer${i},,Nice!,`;
+  const header = "source,author,bio,text,likes\n";
+  const beforeRows = [...Array(5)].map((_, i) => buyerRow(i))
+    .concat([...Array(28)].map((_, i) => peerRow(i)))
+    .concat([...Array(2)].map((_, i) => passerRow(i)));
+  const afterRows = [...Array(15)].map((_, i) => buyerRow(i))
+    .concat([...Array(15)].map((_, i) => peerRow(i)))
+    .concat([...Array(5)].map((_, i) => passerRow(i)));
+  const beforePath = join(dir, "before.csv");
+  const afterPath = join(dir, "after.csv");
+  const outDir = join(dir, "out");
+  writeFileSync(beforePath, header + beforeRows.join("\n") + "\n");
+  writeFileSync(afterPath, header + afterRows.join("\n") + "\n");
+  const r = runCli(["audit", "--file", beforePath, "--compare", afterPath, "--out", outDir]);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /Audience shift/);
+  assert.match(r.stdout, /Buyer share is rising/);
+  assert.match(r.stdout, /Verdict changed/);
+  assert.equal(existsSync(join(outDir, "audience-compare.md")), true);
+  assert.equal(existsSync(join(outDir, "audience-compare.json")), true);
+  const md = readFileSync(join(outDir, "audience-compare.md"), "utf-8");
+  assert.match(md, /shifting toward buyers/);
+});
+
+test("CLI audit --compare with a missing file exits 2", () => {
+  const r = runCli(["audit", "--file", fx("audit.csv"), "--compare", "/nonexistent/missing.csv"]);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /File not found/);
+});
+
+// --- measure: score the rules against user labels (audit --measure) ---
+const mk = (author, text, label) => ({ id: author, source: "x", author, text, label });
+
+test("measureAgreement: 4 of 5 agree, small sample is directional only", () => {
+  const m = measureAgreement([
+    mk("alice", "How much does it cost for a small shop?", "buyer"),
+    mk("bob", "I built my own version, check out my repo", "peer"),
+    mk("carol", "Nice!", "passer-by"),
+    mk("dave", "Interesting, tell me more.", "cannot-tell"),
+    mk("erin", "I built a similar tool with my stack", "buyer"), // rules say peer
+  ]);
+  assert.equal(m.labelled, 5);
+  assert.equal(m.agreed, 4);
+  assert.equal(m.agreement, 0.8);
+  assert.equal(m.target, 0.7);
+  assert.equal(m.sampleTooSmall, true);
+  assert.equal(m.targetMet, null); // too small to judge, even at 80%
+  assert.equal(m.mismatchTotal, 1);
+  assert.deepEqual(m.mismatches, [{ author: "erin", expected: "buyer", predicted: "peer" }]);
+  assert.deepEqual(m.perClass.buyer, { labelled: 2, agreed: 1 });
+  assert.deepEqual(m.perClass.peer, { labelled: 1, agreed: 1 });
+});
+
+test("measureAgreement: 30 labelled, all agree -> target met", () => {
+  const rows = [];
+  for (let i = 0; i < 15; i++) rows.push(mk(`buyer${i}`, "How much does it cost?", "buyer"));
+  for (let i = 0; i < 15; i++) rows.push(mk(`peer${i}`, "I built my own version, check out my repo", "peer"));
+  const m = measureAgreement(rows);
+  assert.equal(m.labelled, 30);
+  assert.equal(m.agreement, 1);
+  assert.equal(m.sampleTooSmall, false);
+  assert.equal(m.targetMet, true);
+  assert.equal(m.mismatchTotal, 0);
+});
+
+test("measureAgreement: 30 labelled, 60% agree -> target NOT met", () => {
+  const rows = [];
+  for (let i = 0; i < 9; i++) rows.push(mk(`buyer${i}`, "How much does it cost?", "buyer"));
+  for (let i = 0; i < 9; i++) rows.push(mk(`peer${i}`, "I built my own version, check out my repo", "peer"));
+  for (let i = 0; i < 12; i++) rows.push(mk(`wrong${i}`, "I built my own version, check out my repo", "buyer"));
+  const m = measureAgreement(rows);
+  assert.equal(m.labelled, 30);
+  assert.equal(m.agreement, 0.6);
+  assert.equal(m.targetMet, false);
+  assert.equal(m.mismatchTotal, 12);
+  assert.equal(m.mismatches.length, 10); // capped at 10 in the report
+});
+
+test("measureAgreement: cannot-tell prediction counts as a miss, not agreement", () => {
+  const m = measureAgreement([mk("vague", "hmm interesting", "buyer")]);
+  assert.equal(m.labelled, 1);
+  assert.equal(m.agreed, 0);
+  assert.equal(m.agreement, 0);
+  assert.deepEqual(m.mismatches, [{ author: "vague", expected: "buyer", predicted: "cannot-tell" }]);
+});
+
+test("measureAgreement: unlabelled and no-text rows are not measured", () => {
+  const m = measureAgreement([
+    mk("alice", "How much does it cost?", "buyer"),
+    { id: "bob", source: "x", author: "bob", text: "I built my own version" }, // no label
+    mk("carol", "", "buyer"), // labelled but no text: vanity, cannot classify
+  ]);
+  assert.equal(m.labelled, 1);
+  assert.equal(m.agreed, 1);
+  assert.equal(m.agreement, 1);
+});
+
+test("measureAgreement: no labels at all -> agreement null", () => {
+  const m = measureAgreement([mk("alice", "How much does it cost?")]);
+  assert.equal(m.labelled, 0);
+  assert.equal(m.agreement, null);
+  assert.equal(m.targetMet, null);
+});
+
+test("CLI audit --measure scores the rules and leaves the audit rule-only", () => {
+  const dir = mkdtempSync(join(tmpdir(), "audience-measure-"));
+  const csv = join(dir, "replies.csv");
+  const labels = join(dir, "labels.json");
+  const out = join(dir, "out");
+  writeFileSync(
+    csv,
+    [
+      "author,text,source",
+      "alice,How much does it cost for a small shop?,x",
+      'bob,"I built my own version, check out my repo",x',
+      "carol,Nice!,x",
+      "dave,\"Interesting, tell me more.\",x",
+      "erin,I built a similar tool with my stack,x",
+    ].join("\n"),
+  );
+  writeFileSync(labels, JSON.stringify({ alice: "buyer", bob: "peer", carol: "passer-by", dave: "cannot-tell", erin: "buyer" }));
+  const r = runCli(["audit", "--file", csv, "--measure", labels, "--out", out]);
+  assert.equal(r.status, 0, r.stderr);
+  // The audit itself is rule-only: erin stays peer (2 peers), labels not applied.
+  assert.match(r.stdout, /peer\s+2\s+40\.0%/);
+  assert.match(r.stdout, /Classification check/);
+  assert.match(r.stdout, /rules agreed on 4 \(80\.0%\)/);
+  assert.match(r.stdout, /directional only/);
+  assert.match(r.stdout, /erin: rules said peer, you said buyer/);
+  const saved = JSON.parse(readFileSync(join(out, "audience-receipt.json"), "utf-8"));
+  assert.equal(saved.measurement.agreement, 0.8);
+  assert.equal(saved.measurement.labelled, 5);
+  assert.equal(saved.counts.peer, 2); // JSON audit also rule-only
+});
+
+test("CLI audit --measure cannot be combined with --compare", () => {
+  const dir = mkdtempSync(join(tmpdir(), "audience-measure-compare-"));
+  const csv = join(dir, "replies.csv");
+  writeFileSync(csv, "author,text,source\nalice,How much does it cost?,x\n");
+  const labels = join(dir, "labels.json");
+  writeFileSync(labels, JSON.stringify({ alice: "buyer" }));
+  const r = runCli(["audit", "--file", csv, "--compare", csv, "--measure", labels]);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /cannot be combined with --compare/);
+});
+
+test("CLI audit --measure with a missing labels file exits 2", () => {
+  const dir = mkdtempSync(join(tmpdir(), "audience-measure-missing-"));
+  const csv = join(dir, "replies.csv");
+  writeFileSync(csv, "author,text,source\nalice,How much does it cost?,x\n");
+  const r = runCli(["audit", "--file", csv, "--measure", join(dir, "nope.json")]);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /File not found/);
 });
