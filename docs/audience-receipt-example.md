@@ -25,6 +25,15 @@ passer-by                2    20.0%
 cannot-tell              2    20.0%
 
 Sample too small (n=10, need 30+ for a verdict). No verdict given — do not treat this split as a conclusion.
+
+By source
+-----------------------------------
+x                        7    buyer 1 (14.3%)
+email                    1    buyer 1 (100.0%)  (directional only: n<5)
+github                   1    buyer 0 (0.0%)  (directional only: n<5)
+reddit                   1    buyer 1 (100.0%)  (directional only: n<5)
+
+Per-source figures with n<5 are directional only — never a verdict per source; the overall verdict is the only verdict.
 ```
 
 With 30 responders and 21 of them peer builders, the same command prints:

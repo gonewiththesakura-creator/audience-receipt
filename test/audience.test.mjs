@@ -11,6 +11,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { importResponders, loadLabels } from "../dist/importers.js";
 import { buildAudit, measureAgreement } from "../dist/audit.js";
+import { renderAuditMarkdown, renderAuditText } from "../dist/render.js";
 import { compareAudits } from "../dist/compare.js";
 import { classifyResponder } from "../dist/classify.js";
 import { parseChecklistFile, runChecklist } from "../dist/checklist.js";
@@ -185,17 +186,114 @@ test("skill wrapper: audience.mjs --help exits 0", () => {
 
 // --- compare: two audits, one direction ---
 // Labels always win over rules, so labelled synthetic responders give exact counts.
-function labelledResponders(counts) {
+function labelledResponders(counts, source = "x") {
   const out = [];
   let i = 0;
   for (const [cls, n] of Object.entries(counts)) {
     for (let k = 0; k < n; k++) {
-      out.push({ id: `r${i}`, source: "x", author: `user${i}`, text: "synthetic row", label: cls });
+      out.push({ id: `r${i}`, source, author: `user${i}`, text: "synthetic row", label: cls });
       i++;
     }
   }
   return out;
 }
+
+// --- bySource: per-source breakdown of the audit ---
+test("bySource: mixed sources give correct counts, shares, buyerShare and sort order", () => {
+  const responders = [
+    ...labelledResponders({ buyer: 6, peer: 4 }, "x"),
+    ...labelledResponders({ buyer: 1, peer: 1 }, "reddit"),
+    ...labelledResponders({ buyer: 2, peer: 2, "passer-by": 1 }, "github"),
+    { id: "vanity-x", source: "x", author: "vanity", text: "" }, // vanity-only: never audited
+  ];
+  const audit = buildAudit(responders);
+  assert.equal(audit.substantive, 17); // vanity row excluded
+  assert.deepEqual(
+    audit.bySource.map((s) => s.source),
+    ["x", "github", "reddit"], // substantive desc, then name asc
+  );
+  const x = audit.bySource[0];
+  assert.equal(x.substantive, 10);
+  assert.deepEqual(x.counts, { buyer: 6, peer: 4, "passer-by": 0, "cannot-tell": 0 });
+  assert.equal(x.shares.buyer, 0.6);
+  assert.equal(x.buyerShare, 0.6);
+  assert.equal(x.smallSample, false);
+  const github = audit.bySource[1];
+  assert.equal(github.substantive, 5);
+  assert.equal(github.counts["passer-by"], 1);
+  assert.equal(github.buyerShare, 0.4);
+  assert.equal(github.smallSample, false); // exactly 5 is not small
+  const reddit = audit.bySource[2];
+  assert.equal(reddit.substantive, 2);
+  assert.equal(reddit.buyerShare, 0.5);
+  assert.equal(reddit.smallSample, true);
+});
+
+test("bySource: equal sizes sort by source name ascending", () => {
+  const responders = [
+    ...labelledResponders({ buyer: 3, peer: 2 }, "reddit"),
+    ...labelledResponders({ buyer: 2, peer: 3 }, "github"),
+  ];
+  const audit = buildAudit(responders);
+  assert.deepEqual(
+    audit.bySource.map((s) => s.source),
+    ["github", "reddit"],
+  );
+});
+
+test("bySource: a source with <5 substantive responders is flagged smallSample", () => {
+  const audit = buildAudit(labelledResponders({ buyer: 1, peer: 1 }, "email"));
+  assert.equal(audit.bySource.length, 1);
+  assert.equal(audit.bySource[0].smallSample, true);
+  assert.equal(audit.bySource[0].buyerShare, 0.5);
+});
+
+test("renderAuditText: By source section for multi-source input, omitted for single-source", () => {
+  const multi = buildAudit([
+    ...labelledResponders({ buyer: 6, peer: 4 }, "x"),
+    ...labelledResponders({ buyer: 1, peer: 1 }, "reddit"),
+  ]);
+  const text = renderAuditText(multi);
+  assert.match(text, /By source/);
+  assert.match(text, /x\s+10\s+buyer 6 \(60\.0%\)/);
+  assert.match(text, /reddit\s+2\s+buyer 1 \(50\.0%\)\s+\(directional only: n<5\)/);
+  assert.match(text, /directional only — never a verdict per source/);
+  const single = buildAudit(labelledResponders({ buyer: 3, peer: 3 }));
+  assert.doesNotMatch(renderAuditText(single), /By source/);
+});
+
+test("renderAuditMarkdown: ## By source table sits before ## Per-row evidence, omitted for single-source", () => {
+  const multi = buildAudit([
+    ...labelledResponders({ buyer: 6, peer: 4 }, "x"),
+    ...labelledResponders({ buyer: 1, peer: 1 }, "reddit"),
+  ]);
+  const md = renderAuditMarkdown(multi);
+  assert.match(md, /## By source/);
+  assert.match(md, /\| x \| 10 \| 6 \| 60\.0% \|/);
+  assert.match(md, /\| reddit \| 2 \| 1 \| 50\.0% \|/);
+  assert.ok(md.indexOf("## By source") < md.indexOf("## Per-row evidence"));
+  const single = buildAudit(labelledResponders({ buyer: 3, peer: 3 }));
+  assert.doesNotMatch(renderAuditMarkdown(single), /## By source/);
+});
+
+test("CLI audit --out writes the bySource breakdown to JSON and Markdown", () => {
+  const dir = mkdtempSync(join(tmpdir(), "audience-receipt-bysource-"));
+  const out = join(dir, "out");
+  const r = runCli(["audit", "--file", fx("audit.csv"), "--out", out]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /By source/); // fixture has x, email, reddit, github
+  const saved = JSON.parse(readFileSync(join(out, "audience-receipt.json"), "utf-8"));
+  assert.deepEqual(
+    saved.bySource.map((s) => s.source),
+    ["x", "email", "github", "reddit"],
+  );
+  assert.equal(saved.bySource[0].substantive, 7);
+  assert.equal(saved.bySource[0].buyerShare, 1 / 7);
+  assert.equal(saved.bySource[0].smallSample, false);
+  assert.equal(saved.bySource[1].smallSample, true); // email: 1 responder
+  const md = readFileSync(join(out, "audience-receipt.md"), "utf-8");
+  assert.ok(md.indexOf("## By source") < md.indexOf("## Per-row evidence"));
+});
 
 test("compare: buyer share rising +25pp, verdict changes from social to buyers", () => {
   const before = buildAudit(labelledResponders({ buyer: 6, peer: 28, "passer-by": 3, "cannot-tell": 3 }));

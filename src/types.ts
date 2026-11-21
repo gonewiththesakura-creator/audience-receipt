@@ -40,6 +40,8 @@ export interface AuditResult {
   substantive: number;
   counts: Record<AudienceClass, number>;
   shares: Record<AudienceClass, number>;
+  /** Per-source breakdown of the substantive classifications (see SourceBreakdown). */
+  bySource: SourceBreakdown[];
   classifications: Classification[];
   skippedRows: number;
   /** Plain-language verdict, or null when the sample is too small to judge. */
@@ -47,6 +49,24 @@ export interface AuditResult {
   sampleTooSmall: boolean;
   /** Present only when the audit ran with --measure. See measureAgreement(). */
   measurement?: AgreementMeasurement;
+}
+
+/**
+ * One source's share of the substantive responders.
+ *
+ * A source with fewer than 5 substantive responders is directional only:
+ * it can hint where buyers come from, but it is never a verdict per
+ * source — the overall verdict (threshold 30) is the only verdict.
+ */
+export interface SourceBreakdown {
+  source: string;
+  substantive: number;
+  counts: Record<AudienceClass, number>;
+  shares: Record<AudienceClass, number>;
+  /** counts.buyer / substantive — the figure founders actually ask about. */
+  buyerShare: number;
+  /** True when substantive < 5. */
+  smallSample: boolean;
 }
 
 /**

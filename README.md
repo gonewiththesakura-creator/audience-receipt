@@ -92,6 +92,14 @@ receipt says so plainly — "this looks like social, not acquisition". The
 70% rule is a founder's heuristic from the research, not a law, and the
 receipt says that. Samples under 30 responders get no verdict at all.
 
+**By source:** when the export mixes several platforms, the receipt adds
+a per-source breakdown — substantive responders, buyer count and buyer
+share per source, largest source first. A source with fewer than 5
+substantive responders is marked directional only: it can hint where the
+buyers are, but it is never a verdict per source — the overall verdict is
+the only verdict. With a single source the section is omitted (it would
+add nothing).
+
 **Compare two periods:** `audit --file last-month.csv --compare this-month.csv`
 runs the audit on both exports and shows, per class, how the share moved in
 percentage points, plus whether the verdict changed. A single audit is a

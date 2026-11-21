@@ -19,8 +19,7 @@ function pct(x: number): string {
 }
 
 /** Shared wording for the --measure section, in both text and Markdown. */
-function measurementLines(m: AgreementMeasurement): string[] {
-  const lines: string[] = [];
+function measurementLines(m: AgreementMeasurement): string[] {  const lines: string[] = [];
   if (m.labelled === 0) {
     lines.push("Classification check: no responder in this export had a label to check against — nothing to measure.");
     return lines;
@@ -44,6 +43,42 @@ function measurementLines(m: AgreementMeasurement): string[] {
   return lines;
 }
 
+/** "By source" lines for the terminal receipt. Empty when there is only one source. */
+function bySourceTextLines(a: AuditResult): string[] {
+  if (a.bySource.length <= 1) return [];
+  const lines: string[] = [];
+  lines.push("");
+  lines.push("By source");
+  lines.push("-----------------------------------");
+  for (const s of a.bySource) {
+    const note = s.smallSample ? "  (directional only: n<5)" : "";
+    lines.push(`${s.source.padEnd(20)} ${String(s.substantive).padStart(5)}    buyer ${s.counts.buyer} (${pct(s.buyerShare)})${note}`);
+  }
+  if (a.bySource.some((s) => s.smallSample)) {
+    lines.push("");
+    lines.push("Per-source figures with n<5 are directional only — never a verdict per source; the overall verdict is the only verdict.");
+  }
+  return lines;
+}
+
+/** "By source" lines for the Markdown receipt. Empty when there is only one source. */
+function bySourceMarkdownLines(a: AuditResult): string[] {
+  if (a.bySource.length <= 1) return [];
+  const lines: string[] = [];
+  lines.push("## By source");
+  lines.push("");
+  lines.push("| Source | Substantive | Buyers | Buyer share |");
+  lines.push("| --- | ---: | ---: | ---: |");
+  for (const s of a.bySource) {
+    lines.push(`| ${s.source} | ${s.substantive} | ${s.counts.buyer} | ${pct(s.buyerShare)} |`);
+  }
+  if (a.bySource.some((s) => s.smallSample)) {
+    lines.push("");
+    lines.push("Per-source figures with n<5 are directional only — never a verdict per source; the overall verdict is the only verdict.");
+  }
+  return lines;
+}
+
 export function renderAuditText(a: AuditResult): string {
   const lines: string[] = [];
   lines.push("Audience receipt — who actually responded?");
@@ -63,6 +98,7 @@ export function renderAuditText(a: AuditResult): string {
     lines.push(`Verdict: ${a.verdict}`);
     lines.push("(The 70% peer-share rule is a founder's heuristic from the research, not a law.)");
   }
+  lines.push(...bySourceTextLines(a));
   if (a.measurement) {
     lines.push("");
     lines.push(...measurementLines(a.measurement));
@@ -97,6 +133,11 @@ export function renderAuditMarkdown(a: AuditResult): string {
     lines.push(...measurementLines(a.measurement));
     lines.push("");
     lines.push("The labels were only the answer key for this check — they were not applied to the audit above. Use `--labels` to override classifications.");
+  }
+  const bySource = bySourceMarkdownLines(a);
+  if (bySource.length > 0) {
+    lines.push("");
+    lines.push(...bySource);
   }
   lines.push("");
   lines.push("## Per-row evidence");

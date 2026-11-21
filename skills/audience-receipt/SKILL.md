@@ -31,7 +31,7 @@ skill 本身绝不自己算分、绝不编数据。
 
 | 用户问什么 | 跑什么（脚本路径以本 skill 目录为准） |
 |---|---|
-| “我的受众到底是谁？” / “点赞的人会买吗？” / “这波发帖算获客吗？” | `node scripts/audience.mjs audit --file <导出 CSV/JSON> [--labels labels.json] [--out DIR]` |
+| “我的受众到底是谁？” / “点赞的人会买吗？” / “这波发帖算获客吗？” | `node scripts/audience.mjs audit --file <导出 CSV/JSON> [--labels labels.json] [--out DIR]`；多来源导出时收据含 By source 分来源 breakdown（每来源的买家数与买家占比，来源 n<5 时只说方向、不下结论） |
 | “这月受众比上月变好了吗？” / “买家占比在涨还是在跌？” | `node scripts/audience.mjs audit --file <上月导出> --compare <本月导出> [--labels labels.json] [--out DIR]`：每类占比变化（百分点）+ verdict 是否变了；任一样本 < 30 时只说方向、不下结论 |
 | “分类准不准？” / “规则在我的人身上管用吗？” | `node scripts/audience.mjs audit --file <导出 CSV/JSON> --measure labels.json [--out DIR]`：规则单独分类、与你的标签对照，给出一致率与 ≥70% 目标是否达成；标签只当答案、不参与审计本身；已打标签 < 30 人时只说方向、不下结论 |
 | “这产品该不该做？” / “动工前先检查一遍” | `node scripts/audience.mjs checklist --file checklist.json`；先 `node scripts/audience.mjs checklist --template checklist.json` 生成空白表再填证据 |
@@ -67,7 +67,9 @@ skill 本身绝不自己算分、绝不编数据。
 - 用户：“我的受众到底是谁？”
   → `node scripts/audience.mjs audit --file my-replies.csv --out ./receipts`，
   读收据后回答：buyer / peer / passer-by / cannot-tell 各占多少，
-  并逐条引用每类的证据；样本 < 30 时说清“没有结论”。
+  并逐条引用每类的证据；样本 < 30 时说清“没有结论”。导出混了多个
+  平台时再讲 By source 表：买家主要来自哪个来源；某来源 n<5 时
+  只说方向、不下结论。
 - 用户：“点赞的人会买吗？”
   → 先跑 audit，再讲清：点赞数只计 vanity、分数为零；真正像买家的
   有几位、证据是什么；不要拿点赞总数当购买意向。

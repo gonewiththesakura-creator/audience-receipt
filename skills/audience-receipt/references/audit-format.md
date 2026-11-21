@@ -15,6 +15,7 @@
 | `substantive` | 有实质文字的回复数（分类的分母） | 所有占比的分母都是它，不是 totalRows |
 | `counts` | 四类计数：`{buyer, peer, "passer-by", "cannot-tell"}` | 讲“哪类人最多”时用 |
 | `shares` | 四类占比（0–1 的小数），四者之和为 1 | 讲“占比多少”时用 |
+| `bySource` | 按来源的 breakdown 数组，每项 `{source, substantive, counts, shares, buyerShare, smallSample}`；按 substantive 降序、来源名升序；只有一个来源时为空数组 | 讲“买家主要来自哪个平台”时用；`smallSample` 为 `true`（substantive < 5）时只说方向、不下结论，绝不按来源给 verdict；单来源时收据里不显示该节 |
 | `classifications` | 逐行分类结果数组（见下表） | 讲某位回复者为什么是某类时用 |
 | `skippedRows` | 跳过的畸形行数 | 有跳过时要如实提，不要略过 |
 | `verdict` | 一句话结论；样本 < 30 时为 `null` | 直接引用，不要改写其中的数字 |

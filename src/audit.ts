@@ -5,10 +5,52 @@
  * only) are vanity: counted separately, never audited as responders.
  */
 import { classifyResponder, verdictFor, CLASSIFICATION_AGREEMENT_TARGET } from "./classify.js";
-import type { AgreementMeasurement, AudienceClass, AuditResult, Classification, Responder } from "./types.js";
+import type { AgreementMeasurement, AudienceClass, AuditResult, Classification, Responder, SourceBreakdown } from "./types.js";
 
 /** Minimum labelled responders before the agreement figure is judged against the target. */
 export const MEASUREMENT_MIN_SAMPLE = 30;
+
+/** A source with fewer than this many substantive responders is directional only. */
+export const SOURCE_SMALL_SAMPLE_MIN = 5;
+
+/**
+ * Group substantive classifications by responder source.
+ *
+ * Vanity-only rows never reach this function (buildAudit drops them
+ * before classifying), so they are excluded exactly as in the overall
+ * counts. Sorted by substantive descending, ties by source name
+ * ascending, for stable output.
+ */
+export function buildSourceBreakdown(classifications: Classification[]): SourceBreakdown[] {
+  const grouped = new Map<string, Record<AudienceClass, number>>();
+  for (const c of classifications) {
+    let counts = grouped.get(c.responder.source);
+    if (!counts) {
+      counts = { buyer: 0, peer: 0, "passer-by": 0, "cannot-tell": 0 };
+      grouped.set(c.responder.source, counts);
+    }
+    counts[c.class]++;
+  }
+  const rows: SourceBreakdown[] = [...grouped.entries()].map(([source, counts]) => {
+    const substantive = Object.values(counts).reduce((s, n) => s + n, 0);
+    const shares: Record<AudienceClass, number> = {
+      buyer: substantive ? counts.buyer / substantive : 0,
+      peer: substantive ? counts.peer / substantive : 0,
+      "passer-by": substantive ? counts["passer-by"] / substantive : 0,
+      "cannot-tell": substantive ? counts["cannot-tell"] / substantive : 0,
+    };
+    return {
+      source,
+      substantive,
+      counts,
+      shares,
+      buyerShare: shares.buyer,
+      smallSample: substantive < SOURCE_SMALL_SAMPLE_MIN,
+    };
+  });
+  rows.sort((a, b) => b.substantive - a.substantive || (a.source < b.source ? -1 : a.source > b.source ? 1 : 0));
+  return rows;
+}
 
 /**
  * Score the classification rules against user-supplied labels.
@@ -89,6 +131,7 @@ export function buildAudit(
     substantive,
     counts,
     shares,
+    bySource: buildSourceBreakdown(classifications),
     classifications,
     skippedRows,
     verdict,
